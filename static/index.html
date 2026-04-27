@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Книга рецептов</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <p class="eyebrow">Recipe Book QA</p>
+        <h1>Книга рецептов</h1>
+        <p class="subtitle">
+          Веб-приложение с API, хранением данных на сервере и правилами для
+          продуктов и блюд.
+        </p>
+      </header>
+
+      <main class="layout">
+        <section class="panel">
+          <div class="section-heading">
+            <h2>Продукты</h2>
+            <button id="reload-products" class="ghost-button">Обновить</button>
+          </div>
+          <form id="product-form" class="stacked-form">
+            <input type="hidden" id="product-id" />
+            <label>
+              Название
+              <input id="product-name" required minlength="2" />
+            </label>
+            <label>
+              Категория
+              <select id="product-category" required></select>
+            </label>
+            <label>
+              Готовность
+              <select id="product-cooking-state" required></select>
+            </label>
+            <div class="grid two">
+              <label>
+                Ккал / 100 г
+                <input id="product-calories" type="number" min="0" step="0.01" required />
+              </label>
+              <label>
+                Белки
+                <input id="product-protein" type="number" min="0" max="100" step="0.01" required />
+              </label>
+              <label>
+                Жиры
+                <input id="product-fat" type="number" min="0" max="100" step="0.01" required />
+              </label>
+              <label>
+                Углеводы
+                <input id="product-carbs" type="number" min="0" max="100" step="0.01" required />
+              </label>
+            </div>
+            <label>
+              Состав
+              <textarea id="product-composition" rows="3"></textarea>
+            </label>
+            <label>
+              Фото (по одной ссылке на строку)
+              <textarea id="product-photos" rows="3"></textarea>
+            </label>
+            <fieldset class="flags">
+              <legend>Флаги</legend>
+              <label><input type="checkbox" value="Веган" name="product-flag" /> Веган</label>
+              <label><input type="checkbox" value="Без глютена" name="product-flag" /> Без глютена</label>
+              <label><input type="checkbox" value="Без сахара" name="product-flag" /> Без сахара</label>
+            </fieldset>
+            <div class="form-actions">
+              <button type="submit">Сохранить продукт</button>
+              <button type="button" id="reset-product" class="ghost-button">Очистить</button>
+            </div>
+          </form>
+
+          <div class="filters">
+            <input id="product-search" placeholder="Поиск по названию" />
+            <select id="product-filter-category"><option value="">Все категории</option></select>
+            <select id="product-filter-cooking"><option value="">Любая готовность</option></select>
+            <select id="product-sort">
+              <option value="name">Сортировка: название</option>
+              <option value="calories">Сортировка: калорийность</option>
+              <option value="protein">Сортировка: белки</option>
+              <option value="fat">Сортировка: жиры</option>
+              <option value="carbs">Сортировка: углеводы</option>
+            </select>
+          </div>
+          <fieldset class="filters flags filter-flags">
+            <legend>Фильтры по флагам продукта</legend>
+            <label><input type="checkbox" value="Веган" name="product-filter-flag" /> Веган</label>
+            <label><input type="checkbox" value="Без глютена" name="product-filter-flag" /> Без глютена</label>
+            <label><input type="checkbox" value="Без сахара" name="product-filter-flag" /> Без сахара</label>
+          </fieldset>
+          <div id="product-list" class="cards"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <h2>Блюда</h2>
+            <button id="reload-dishes" class="ghost-button">Обновить</button>
+          </div>
+          <form id="dish-form" class="stacked-form">
+            <input type="hidden" id="dish-id" />
+            <label>
+              Название
+              <input id="dish-name" required minlength="2" />
+            </label>
+            <label>
+              Категория
+              <select id="dish-category"></select>
+            </label>
+            <label>
+              Размер порции, г
+              <input id="dish-portion-size" type="number" min="0.01" step="0.01" required />
+            </label>
+            <label>
+              Фото (по одной ссылке на строку)
+              <textarea id="dish-photos" rows="3"></textarea>
+            </label>
+            <div id="dish-ingredients" class="ingredient-list"></div>
+            <button type="button" id="add-ingredient" class="ghost-button">Добавить ингредиент</button>
+            <div class="grid two">
+              <label>
+                Ккал / порция
+                <input id="dish-calories" type="number" min="0" step="0.01" />
+              </label>
+              <label>
+                Белки / порция
+                <input id="dish-protein" type="number" min="0" step="0.01" />
+              </label>
+              <label>
+                Жиры / порция
+                <input id="dish-fat" type="number" min="0" step="0.01" />
+              </label>
+              <label>
+                Углеводы / порция
+                <input id="dish-carbs" type="number" min="0" step="0.01" />
+              </label>
+            </div>
+            <div id="dish-preview" class="hint-card"></div>
+            <fieldset class="flags">
+              <legend>Флаги блюда</legend>
+              <label><input type="checkbox" value="Веган" name="dish-flag" /> Веган</label>
+              <label><input type="checkbox" value="Без глютена" name="dish-flag" /> Без глютена</label>
+              <label><input type="checkbox" value="Без сахара" name="dish-flag" /> Без сахара</label>
+            </fieldset>
+            <div class="form-actions">
+              <button type="submit">Сохранить блюдо</button>
+              <button type="button" id="reset-dish" class="ghost-button">Очистить</button>
+            </div>
+          </form>
+
+          <div class="filters">
+            <input id="dish-search" placeholder="Поиск по названию" />
+            <select id="dish-filter-category"><option value="">Все категории</option></select>
+          </div>
+          <fieldset class="filters flags filter-flags">
+            <legend>Фильтры по флагам блюда</legend>
+            <label><input type="checkbox" value="Веган" name="dish-filter-flag" /> Веган</label>
+            <label><input type="checkbox" value="Без глютена" name="dish-filter-flag" /> Без глютена</label>
+            <label><input type="checkbox" value="Без сахара" name="dish-filter-flag" /> Без сахара</label>
+          </fieldset>
+          <div id="dish-list" class="cards"></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="details-modal" class="modal hidden">
+      <div class="modal-backdrop" data-close-modal="true"></div>
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 id="modal-title">Карточка</h2>
+          <button id="close-modal" type="button" class="ghost-button">Закрыть</button>
+        </div>
+        <div id="modal-content" class="modal-content"></div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/app.js"></script>
+  </body>
+  </html>
