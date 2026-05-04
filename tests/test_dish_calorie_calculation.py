@@ -81,27 +81,29 @@ class DishCalorieCalculationTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             self._create_dish(100, [])
 
-    def test_calories_boundary_values(self) -> None:
-        """Граничные значения: минимально допустимое и недопустимое количество."""
+    def test_valid_boundary_value(self) -> None:
+        """Граничное значение: допустимое количество ингредиента."""
         pumpkin = self._create_product("Тыква", 1.0, 0.1, 4.4)
-
         dish = self._create_dish(
             0.01,
             [{"product_id": pumpkin["id"], "quantity": 0.01}],
         )
         self.assertEqual(0.0, dish["calories"])
 
-        with self.assertRaises(ValidationError):
-            self._create_dish(
-                100,
-                [{"product_id": pumpkin["id"], "quantity": 0}],
-            )
+    def test_invalid_boundary_values(self) -> None:
+        """Граничные значения: недопустимые количества 0 и меньше 0."""
+        pumpkin = self._create_product("Тыква", 1.0, 0.1, 4.4)
+        cases = [0, -0.01]
 
-        with self.assertRaises(ValidationError):
-            self._create_dish(
-                100,
-                [{"product_id": pumpkin["id"], "quantity": -0.01}],
-            )
+        for quantity in cases:
+            with self.subTest(quantity=quantity):
+                with self.assertRaises(ValidationError):
+                    self._create_dish(
+                        100,
+                        [{"product_id": pumpkin["id"], "quantity": quantity}],
+                    )
+
+
 
 if __name__ == "__main__":
     unittest.main()
