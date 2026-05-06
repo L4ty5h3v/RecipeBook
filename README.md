@@ -23,3 +23,23 @@ python3 run.py
 ```bash
 python3 -m unittest discover -s tests
 ```
+
+## Интеграционные API-тесты
+
+Интеграционные тесты запускаются только против уже поднятого backend и ходят в
+реальный HTTP API без изоляции бизнес-логики.
+
+1. Запустите backend:
+
+```bash
+python3 run.py
+```
+
+2. В отдельном терминале запустите integration-тесты:
+
+```bash
+python3 run_tests.py
+```
+
+При необходимости можно указать адрес backend через переменную окружения
+`RECIPEBOOK_TEST_BASE_URL`.

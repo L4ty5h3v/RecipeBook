@@ -16,9 +16,7 @@ from recipebook.service import (
 from recipebook.store import JsonStore
 
 
-def build_server(
-    base_dir: Path, host: str = "127.0.0.1", port: int = 8080
-) -> ThreadingHTTPServer:
+def run(base_dir: Path, host: str = "127.0.0.1", port: int = 8080) -> None:
     service = RecipeBookService(JsonStore(base_dir / "data" / "db.json"))
     static_dir = base_dir / "static"
     pictures_dir = base_dir / "pictures"
@@ -175,10 +173,6 @@ def build_server(
                 "ingredients": ingredients,
             }
 
-    return ThreadingHTTPServer((host, port), RequestHandler)
-
-
-def run(base_dir: Path, host: str = "127.0.0.1", port: int = 8080) -> None:
-    server = build_server(base_dir, host=host, port=port)
+    server = ThreadingHTTPServer((host, port), RequestHandler)
     print(f"Recipe Book is running at http://{host}:{port}")
     server.serve_forever()
