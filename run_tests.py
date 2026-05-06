@@ -2,6 +2,7 @@
 
 Файл удобно запускать напрямую из PyCharm одной кнопкой Run.
 Тесты выполняются против уже поднятого backend и не поднимают сервер сами.
+Если backend не запущен, тесты падают на реальных HTTP-запросах.
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ from __future__ import annotations
 import unittest
 
 
-def build_suite() -> unittest.TestSuite:
+def build_suite() -> unittest.  TestSuite:
     """Собирает integration-тесты из каталога tests/integration."""
     loader = unittest.defaultTestLoader
     return loader.discover("tests/integration", pattern="test_*.py")

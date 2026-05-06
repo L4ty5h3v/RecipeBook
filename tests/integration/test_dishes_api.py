@@ -11,13 +11,53 @@ from tests.integration.payloads import build_dish_payload
 class DishesApiTest(LiveApiTestCase):
     """Проверяет CRUD, фильтрацию, расчёты и валидацию блюд."""
 
+    def _create_sample_dish(self) -> dict:
+        """Создаёт базовое тестовое блюдо для последующих проверок."""
+        product = self._create_product()
+        return self._create_dish(
+            name=self.make_test_name("суп"),
+            ingredients=[{"product_id": product["id"], "quantity": 100}],
+        )
+
+    def _update_sample_dish(self) -> dict:
+        """Обновляет тестовое блюдо и возвращает ответ API."""
+        product = self._create_product()
+        dish = self._create_dish(
+            name=self.make_test_name("суп"),
+            ingredients=[{"product_id": product["id"], "quantity": 100}],
+        )
+        return self._request(
+            "PUT",
+            f"/api/dishes/{dish['id']}",
+            build_dish_payload(
+                name=self.make_test_name("обновлённый суп"),
+                ingredients=[{"product_id": product["id"], "quantity": 150}],
+                photos=["/pictures/soup.png"],
+                portion_size=300,
+                category="Первое",
+            ),
+        )
+
+    def _create_macro_dish(self) -> dict:
+        """Создаёт блюдо с макросом категории в названии."""
+        product = self._create_product()
+        return self._request(
+            "POST",
+            "/api/dishes",
+            build_dish_payload(
+                name=f"!суп {self.make_test_name('тыквенный крем')}",
+                ingredients=[{"product_id": product["id"], "quantity": 100}],
+            ),
+            expected_status=201,
+        )
+
     def test_get_dish_returns_not_found_for_unknown_id(self) -> None:
         """Получение блюда по неизвестному id возвращает 404."""
         response = self._request("GET", "/api/dishes/missing-id", expected_status=404)
         self.assertIn("Блюдо не найдено", response["error"])
 
-    def test_create_dish_returns_computed_nutrition_and_flags(self) -> None:
-        """Создание блюда должно возвращать расчётную пищевую ценность и доступные флаги."""
+    def test_create_dish_returns_computed_nutrition(self) -> None:
+        """Создание блюда должно возвращать расчётную пищевую ценность."""
         carrot = self._create_product(name=self.make_test_name("морковь"))
         water = self._create_product(
             name=self.make_test_name("вода"),
@@ -37,10 +77,63 @@ class DishesApiTest(LiveApiTestCase):
             portion_size=200,
         )
         self.assertEqual(41.0, dish["suggested_nutrition"]["calories"])
+
+    def test_create_dish_returns_available_flags(self) -> None:
+        """Создание блюда должно возвращать список доступных флагов."""
+        carrot = self._create_product(name=self.make_test_name("морковь"))
+        water = self._create_product(
+            name=self.make_test_name("вода"),
+            calories=0,
+            protein=0,
+            fat=0,
+            carbs=0,
+            composition="",
+            category="Жидкость",
+        )
+        dish = self._create_dish(
+            name=self.make_test_name("суп"),
+            ingredients=[
+                {"product_id": carrot["id"], "quantity": 100},
+                {"product_id": water["id"], "quantity": 100},
+            ],
+            portion_size=200,
+        )
         self.assertEqual(["Веган", "Без глютена", "Без сахара"], dish["available_flags"])
 
-    def test_create_dish_rejects_invalid_equivalence_classes(self) -> None:
-        """Эквивалентное разбиение: API отвергает пустой состав, неизвестный продукт и недоступный флаг."""
+    def test_create_dish_rejects_empty_ingredients(self) -> None:
+        """Эквивалентное разбиение: пустой состав относится к невалидному классу."""
+        response = self._request(
+            "POST",
+            "/api/dishes",
+            build_dish_payload(
+                name=self.make_test_name("пустое блюдо"),
+                ingredients=[],
+                portion_size=200,
+                category="Суп",
+                flags=[],
+            ),
+            expected_status=400,
+        )
+        self.assertIn("хотя бы один ингредиент", response["error"])
+
+    def test_create_dish_rejects_missing_product_in_ingredients(self) -> None:
+        """Эквивалентное разбиение: несуществующий продукт относится к невалидному классу."""
+        response = self._request(
+            "POST",
+            "/api/dishes",
+            build_dish_payload(
+                name=self.make_test_name("секретное блюдо"),
+                ingredients=[{"product_id": "missing-id", "quantity": 100}],
+                portion_size=200,
+                category="Суп",
+                flags=[],
+            ),
+            expected_status=400,
+        )
+        self.assertIn("несуществующий продукт", response["error"])
+
+    def test_create_dish_rejects_unavailable_flag(self) -> None:
+        """Эквивалентное разбиение: недоступный флаг относится к невалидному классу."""
         product = self._create_product(
             name=self.make_test_name("курица"),
             calories=168,
@@ -50,62 +143,28 @@ class DishesApiTest(LiveApiTestCase):
             category="Мясной",
             flags=["Без глютена"],
         )
-        cases = [
-            {
-                "payload": build_dish_payload(
-                    name=self.make_test_name("пустое блюдо"),
-                    ingredients=[],
-                    portion_size=200,
-                    category="Суп",
-                    flags=[],
-                ),
-                "expected_error": "хотя бы один ингредиент",
-            },
-            {
-                "payload": build_dish_payload(
-                    name=self.make_test_name("секретное блюдо"),
-                    ingredients=[{"product_id": "missing-id", "quantity": 100}],
-                    portion_size=200,
-                    category="Суп",
-                    flags=[],
-                ),
-                "expected_error": "несуществующий продукт",
-            },
-            {
-                "payload": build_dish_payload(
-                    name=self.make_test_name("куриный суп"),
-                    ingredients=[{"product_id": product["id"], "quantity": 100}],
-                    portion_size=200,
-                    category="Суп",
-                    flags=["Веган"],
-                ),
-                "expected_error": "недоступны флаги",
-            },
-        ]
-
-        for case in cases:
-            with self.subTest(payload=case["payload"]["name"]):
-                response = self._request(
-                    "POST",
-                    "/api/dishes",
-                    case["payload"],
-                    expected_status=400,
-                )
-                self.assertIn(case["expected_error"], response["error"])
-
-    def test_create_dish_uses_macro_to_fill_category(self) -> None:
-        """Макрос в названии должен подставлять категорию блюда по умолчанию."""
-        product = self._create_product()
-        dish = self._request(
+        response = self._request(
             "POST",
             "/api/dishes",
             build_dish_payload(
-                name=f"!суп {self.make_test_name('тыквенный крем')}",
+                name=self.make_test_name("куриный суп"),
                 ingredients=[{"product_id": product["id"], "quantity": 100}],
+                portion_size=200,
+                category="Суп",
+                flags=["Веган"],
             ),
-            expected_status=201,
+            expected_status=400,
         )
+        self.assertIn("недоступны флаги", response["error"])
+
+    def test_create_dish_normalizes_name_from_macro(self) -> None:
+        """Макрос в названии должен очищаться в сохранённом имени блюда."""
+        dish = self._create_macro_dish()
         self.assertEqual(self.make_test_name("тыквенный крем"), dish["name"])
+
+    def test_create_dish_uses_category_from_macro(self) -> None:
+        """Макрос в названии должен подставлять категорию блюда."""
+        dish = self._create_macro_dish()
         self.assertEqual("Суп", dish["category"])
 
     def test_create_dish_accepts_minimum_positive_portion_boundary(self) -> None:
@@ -209,27 +268,24 @@ class DishesApiTest(LiveApiTestCase):
         )
         self.assertIn("Неизвестный флаг", response["error"])
 
-    def test_update_dish_updates_fields_and_sets_updated_at(self) -> None:
-        """PUT /api/dishes/{id} должен обновлять поля блюда и updated_at."""
-        product = self._create_product()
-        dish = self._create_dish(
-            name=self.make_test_name("суп"),
-            ingredients=[{"product_id": product["id"], "quantity": 100}],
-        )
-        updated = self._request(
-            "PUT",
-            f"/api/dishes/{dish['id']}",
-            build_dish_payload(
-                name=self.make_test_name("обновлённый суп"),
-                ingredients=[{"product_id": product["id"], "quantity": 150}],
-                photos=["/pictures/soup.png"],
-                portion_size=300,
-                category="Первое",
-            ),
-        )
+    def test_update_dish_changes_name(self) -> None:
+        """Обновление блюда должно менять имя."""
+        updated = self._update_sample_dish()
         self.assertEqual(self.make_test_name("обновлённый суп"), updated["name"])
+
+    def test_update_dish_changes_portion_size(self) -> None:
+        """Обновление блюда должно менять размер порции."""
+        updated = self._update_sample_dish()
         self.assertEqual(300.0, updated["portion_size"])
+
+    def test_update_dish_changes_category(self) -> None:
+        """Обновление блюда должно менять категорию."""
+        updated = self._update_sample_dish()
         self.assertEqual("Первое", updated["category"])
+
+    def test_update_dish_sets_updated_at(self) -> None:
+        """Обновление блюда должно проставлять updated_at."""
+        updated = self._update_sample_dish()
         self.assertIsNotNone(updated["updated_at"])
 
     def test_update_dish_returns_not_found_for_unknown_id(self) -> None:
@@ -248,10 +304,10 @@ class DishesApiTest(LiveApiTestCase):
         )
         self.assertIn("Блюдо не найдено", response["error"])
 
-    def test_delete_dish_removes_entity(self) -> None:
+    def test_delete_dish_makes_entity_unavailable(self) -> None:
         """Удаление блюда должно делать его недоступным для последующего чтения."""
         dish = self._create_dish(name=self.make_test_name("удаляемый суп"))
-        self.assertIsNone(self._request("DELETE", f"/api/dishes/{dish['id']}", expected_status=204))
+        self._request("DELETE", f"/api/dishes/{dish['id']}", expected_status=204)
         response = self._request("GET", f"/api/dishes/{dish['id']}", expected_status=404)
         self.assertIn("Блюдо не найдено", response["error"])
 

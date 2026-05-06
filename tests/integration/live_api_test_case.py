@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import unittest
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -17,17 +17,6 @@ class LiveApiTestCase(unittest.TestCase):
 
     base_url = os.environ.get("RECIPEBOOK_TEST_BASE_URL", "http://127.0.0.1:8080")
     test_prefix = "__api_test__"
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        """Проверяет доступность живого backend перед выполнением test suite."""
-        try:
-            cls._request_static("GET", "/api/meta")
-        except URLError as error:
-            raise RuntimeError(
-                "Живой backend недоступен. Перед запуском integration-тестов "
-                f"поднимите сервер по адресу {cls.base_url}."
-            ) from error
 
     def setUp(self) -> None:
         """Удаляет только тестовые сущности, не затрагивая пользовательские данные."""
