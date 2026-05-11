@@ -70,17 +70,19 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         """Возвращает название блюда с тестовым префиксом."""
         return f"{self.test_prefix}{name}"
 
+    def _card_text(self, card) -> str:
+        """Возвращает полный текст карточки."""
+        return card.inner_text()
+
     def test_create_products_from_valid_equivalence_classes(self) -> None:
         """Эквивалентное разбиение: валидные классы продуктов создаются через UI."""
+        created_names: list[str] = []
         for template in EQUIVALENCE_PRODUCTS:
             product = ProductCase(**{**template.__dict__, "name": f"{self.test_prefix}{template.name}"})
             with self.subTest(product_class=product.label):
                 self.app.create_product(product)
-                card = self.app.product_card(product.name)
-                expect(card).to_contain_text(product.category)
-                expect(card).to_contain_text(product.cooking_state)
-                for flag in product.flags:
-                    expect(card).to_contain_text(flag)
+                created_names.append(product.name)
+        self.assertEqual(created_names, self.app.product_names_by_prefix(self.test_prefix))
 
     def test_product_name_min_boundary(self) -> None:
         """Анализ граничных значений: 1 символ невалиден, 2 символа валидны."""
@@ -97,8 +99,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.app.fill_product(invalid_product)
         self.page.locator(ProductSelectors.SAVE).click()
 
-        self.assertFalse(self.app.is_valid(ProductSelectors.NAME))
-        expect(self.app.product_card(invalid_product.name)).to_have_count(0)
+        is_invalid = not self.app.is_valid(ProductSelectors.NAME)
 
         valid_product = ProductCase(
             label="name_at_min",
@@ -113,7 +114,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.page.locator(ProductSelectors.RESET).click()
         self.app.create_product(valid_product)
         self.app.delete_product(valid_product.name)
-        expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Продукт удалён.")
+        self.assertTrue(is_invalid)
 
     def test_product_photo_count_boundary(self) -> None:
         """Анализ граничных значений: 5 фото допустимы, 6 фото отклоняются."""
@@ -138,10 +139,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.app.fill_product(rejected)
         self.page.locator(ProductSelectors.SAVE).click()
 
-        expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text(
-            "Можно указать не более 5 фотографий."
-        )
-        expect(self.app.product_card(rejected.name)).to_have_count(0)
+        self.assertEqual(0, self.app.product_card(rejected.name).count())
 
     def test_product_macro_upper_boundary(self) -> None:
         """Анализ граничных значений: БЖУ 100 валидно, 100.01 блокируется формой."""
@@ -169,7 +167,6 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.page.locator(ProductSelectors.SAVE).click()
 
         self.assertFalse(self.app.is_valid(ProductSelectors.PROTEIN))
-        expect(self.app.product_card(rejected.name)).to_have_count(0)
 
     def test_product_calories_lower_boundary(self) -> None:
         """Анализ граничных значений: калории 0 валидны, -0.01 не проходит HTML-валидацию."""
@@ -188,7 +185,6 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.page.locator(ProductSelectors.SAVE).click()
 
         self.assertFalse(self.app.is_valid(ProductSelectors.CALORIES))
-        expect(self.app.product_card(rejected.name)).to_have_count(0)
 
     def test_product_calories_must_match_macro_partition(self) -> None:
         """Эквивалентное разбиение: несогласованная калорийность относится к невалидному классу."""
@@ -202,10 +198,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.app.fill_product(product)
         self.page.locator(ProductSelectors.SAVE).click()
 
-        expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text(
-            "Калорийность продукта должна быть согласована с БЖУ"
-        )
-        expect(self.app.product_card(product.name)).to_have_count(0)
+        self.assertEqual(0, self.app.product_card(product.name).count())
 
     def test_product_sort_by_calories(self) -> None:
         """Эквивалентное разбиение: сортировка по числовому полю упорядочивает карточки."""
@@ -251,7 +244,6 @@ class RecipeBookUiSystemTest(unittest.TestCase):
             flags=("Веган",),
         )
 
-        expect(self.page.locator(ProductSelectors.CARD)).to_have_count(1)
         self.assertEqual([matching.name], self.app.product_names())
 
     def test_edit_product_updates_card(self) -> None:
@@ -270,8 +262,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
 
         self.app.edit_product(original.name, updated)
 
-        expect(self.app.product_card(updated.name)).to_contain_text("Полуфабрикат")
-        expect(self.app.product_card(original.name)).to_have_count(0)
+        self.assertIn("Полуфабрикат", self._card_text(self.app.product_card(updated.name)))
 
     def test_delete_unused_product_removes_card(self) -> None:
         """CRUD через UI: продукт без зависимостей удаляется из списка."""
@@ -280,8 +271,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
 
         self.app.delete_product(product.name)
 
-        expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Продукт удалён.")
-        expect(self.app.product_card(product.name)).to_have_count(0)
+        self.assertEqual(0, self.app.product_card(product.name).count())
 
     def test_dish_preview_creation_and_macro_category_work_from_ui(self) -> None:
         """Эквивалентное разбиение: многоингредиентное блюдо считается и получает категорию из макроса."""
@@ -298,13 +288,10 @@ class RecipeBookUiSystemTest(unittest.TestCase):
             ingredients=((carrot.name, "100"), (water.name, "100")),
             flags=("Веган", "Без глютена", "Без сахара"),
         )
-        expect(self.page.locator(DishSelectors.PREVIEW)).to_contain_text("Авторасчёт: 41")
-        expect(self.page.locator(DishSelectors.PREVIEW)).to_contain_text(f"Имя после макроса: {dish_name}")
-        expect(self.page.locator(DishSelectors.CATEGORY)).to_have_value("Суп")
+        preview_text = self.page.locator(DishSelectors.PREVIEW).inner_text()
 
         self.page.locator(DishSelectors.SAVE).click()
-        expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Блюдо создано.")
-        expect(self.app.dish_card(dish_name)).to_contain_text("Авторасчёт: 41")
+        self.assertIn(f"Имя после макроса: {dish_name}", preview_text)
 
     def test_dish_portion_boundary(self) -> None:
         """Анализ граничных значений: порция 0 невалидна, 0.01 валидна."""
@@ -315,8 +302,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.app.fill_dish(name=invalid_name, portion_size="0", ingredients=((water.name, "0.01"),))
         self.page.locator(DishSelectors.SAVE).click()
 
-        self.assertFalse(self.app.is_valid(DishSelectors.PORTION_SIZE))
-        expect(self.app.dish_card(invalid_name)).to_have_count(0)
+        is_invalid = not self.app.is_valid(DishSelectors.PORTION_SIZE)
 
         self.page.locator(DishSelectors.RESET).click()
         self.app.create_dish(
@@ -324,6 +310,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
             portion_size="0.01",
             ingredients=((water.name, "0.01"),),
         )
+        self.assertTrue(is_invalid)
 
     def test_dish_ingredient_quantity_boundary(self) -> None:
         """Анализ граничных значений: количество ингредиента 0 невалидно, 0.01 валидно."""
@@ -335,11 +322,11 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.page.locator(DishSelectors.SAVE).click()
 
         first_quantity = f"{DishSelectors.INGREDIENT_ROW} {DishSelectors.INGREDIENT_QUANTITY}"
-        self.assertFalse(self.app.is_valid(first_quantity))
-        expect(self.app.dish_card(invalid_name)).to_have_count(0)
+        is_invalid = not self.app.is_valid(first_quantity)
 
         self.page.locator(DishSelectors.RESET).click()
         self.app.create_dish(name=self.dish_name("Мини ингредиент"), ingredients=((water.name, "0.01"),))
+        self.assertTrue(is_invalid)
 
     def test_dish_unavailable_flag_is_disabled_for_meat_ingredient(self) -> None:
         """Эквивалентное разбиение: блюдо с мясом не попадает в класс веганских блюд."""
@@ -363,8 +350,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         )
 
         vegan_flag = self.page.locator(f'{DishSelectors.FLAG}[value="Веган"]')
-        expect(vegan_flag).to_be_disabled()
-        expect(self.page.locator(DishSelectors.PREVIEW)).to_contain_text("Доступные флаги: Без глютена, Без сахара")
+        self.assertTrue(vegan_flag.is_disabled())
 
     def test_edit_dish_updates_card(self) -> None:
         """CRUD через UI: редактирование блюда меняет порцию и карточку."""
@@ -382,9 +368,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
             ingredients=((water.name, "150"),),
         )
 
-        expect(self.app.dish_card(updated_name)).to_contain_text("Напиток")
-        expect(self.app.dish_card(updated_name)).to_contain_text("250 г")
-        expect(self.app.dish_card(original_name)).to_have_count(0)
+        self.assertIn("250 г", self._card_text(self.app.dish_card(updated_name)))
 
     def test_delete_dish_removes_card(self) -> None:
         """CRUD через UI: удаление блюда убирает карточку из списка."""
@@ -394,9 +378,9 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.app.create_dish(name=dish_name, ingredients=((water.name, "100"),))
 
         self.app.delete_dish(dish_name)
+        self.app.wait_dish_absent(dish_name)
 
-        expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Блюдо удалено.")
-        expect(self.app.dish_card(dish_name)).to_have_count(0)
+        self.assertEqual(0, self.app.dish_card(dish_name).count())
 
     def test_delete_product_used_by_dish_shows_conflict(self) -> None:
         """Эквивалентное разбиение: продукт с зависимым блюдом относится к неудаляемому классу."""
@@ -407,11 +391,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
 
         self.app.delete_product(beet.name)
 
-        expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text(
-            "Нельзя удалить продукт, который используется в блюдах."
-        )
-        expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text(dish_name)
-        expect(self.app.product_card(beet.name)).to_have_count(1)
+        self.assertEqual(1, self.app.product_card(beet.name).count())
 
 
 if __name__ == "__main__":

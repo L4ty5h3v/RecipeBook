@@ -87,6 +87,12 @@ class RecipeBookPage:
         """Возвращает названия продуктов в текущем порядке карточек."""
         return self.page.locator(f"{ProductSelectors.CARD} h3").all_text_contents()
 
+    def product_names_by_prefix(self, prefix: str) -> list[str]:
+        """Возвращает названия только тестовых продуктов с указанным префиксом."""
+        self.filter_products(query=prefix)
+        self.page.wait_for_timeout(200)
+        return self.product_names()
+
     def edit_product(self, old_name: str, new_product: ProductCase) -> None:
         """Открывает продукт на редактирование и сохраняет новые значения."""
         self.product_card(old_name).locator(ProductSelectors.EDIT_BUTTON).click()
@@ -183,6 +189,10 @@ class RecipeBookPage:
     def dish_names(self) -> list[str]:
         """Возвращает названия блюд в текущем порядке карточек."""
         return self.page.locator(f"{DishSelectors.CARD} h3").all_text_contents()
+
+    def wait_dish_absent(self, name: str) -> None:
+        """Ждёт исчезновения карточки блюда после удаления."""
+        expect(self.dish_card(name)).to_have_count(0)
 
     def filter_dishes(
         self,
