@@ -93,6 +93,10 @@ class RecipeBookPage:
         self.page.wait_for_timeout(200)
         return self.product_names()
 
+    def wait_product_absent(self, name: str) -> None:
+        """Ждёт исчезновения карточки продукта после удаления."""
+        expect(self.product_card(name)).to_have_count(0)
+
     def edit_product(self, old_name: str, new_product: ProductCase) -> None:
         """Открывает продукт на редактирование и сохраняет новые значения."""
         self.product_card(old_name).locator(ProductSelectors.EDIT_BUTTON).click()

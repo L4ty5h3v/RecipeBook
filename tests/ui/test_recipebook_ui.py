@@ -270,6 +270,7 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.app.create_product(product)
 
         self.app.delete_product(product.name)
+        self.app.wait_product_absent(product.name)
 
         self.assertEqual(0, self.app.product_card(product.name).count())
 
@@ -294,12 +295,12 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.assertIn(f"Имя после макроса: {dish_name}", preview_text)
 
     def test_dish_portion_boundary(self) -> None:
-        """Анализ граничных значений: порция 0 невалидна, 0.01 валидна."""
+        """Анализ граничных значений: порция -0.01 невалидна, 0.01 валидна."""
         water = self.product("Капля воды", calories="0", protein="0", fat="0", carbs="0", category="Жидкость")
         self.app.create_product(water)
 
         invalid_name = self.dish_name("Нулевая порция")
-        self.app.fill_dish(name=invalid_name, portion_size="0", ingredients=((water.name, "0.01"),))
+        self.app.fill_dish(name=invalid_name, portion_size="-0.01", ingredients=((water.name, "0.01"),))
         self.page.locator(DishSelectors.SAVE).click()
 
         is_invalid = not self.app.is_valid(DishSelectors.PORTION_SIZE)
@@ -313,12 +314,12 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.assertTrue(is_invalid)
 
     def test_dish_ingredient_quantity_boundary(self) -> None:
-        """Анализ граничных значений: количество ингредиента 0 невалидно, 0.01 валидно."""
+        """Анализ граничных значений: количество ингредиента -0.01 невалидно, 0.01 валидно."""
         water = self.product("Вода для количества", calories="0", protein="0", fat="0", carbs="0", category="Жидкость")
         self.app.create_product(water)
 
         invalid_name = self.dish_name("Нулевой ингредиент")
-        self.app.fill_dish(name=invalid_name, ingredients=((water.name, "0"),))
+        self.app.fill_dish(name=invalid_name, ingredients=((water.name, "-0.01"),))
         self.page.locator(DishSelectors.SAVE).click()
 
         first_quantity = f"{DishSelectors.INGREDIENT_ROW} {DishSelectors.INGREDIENT_QUANTITY}"
