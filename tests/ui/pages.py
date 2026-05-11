@@ -1,6 +1,8 @@
-"""Page objects for Recipe Book UI system tests."""
+"""Page Object для системных UI-тестов Recipe Book."""
 
 from __future__ import annotations
+
+import re
 
 from playwright.sync_api import Page, expect
 
@@ -9,14 +11,14 @@ from tests.ui.test_data import ProductCase
 
 
 class RecipeBookPage:
-    """High-level actions and assertions for the Recipe Book single page UI."""
+    """Высокоуровневые действия пользователя на странице приложения."""
 
     def __init__(self, page: Page, base_url: str) -> None:
         self.page = page
         self.base_url = base_url
 
     def open(self) -> None:
-        """Open the app and wait for dictionaries and initial lists to load."""
+        """Открывает приложение и ждёт загрузки справочников и списков."""
         self.page.goto(self.base_url)
         self.page.wait_for_function(
             """
@@ -28,14 +30,14 @@ class RecipeBookPage:
         )
 
     def create_product(self, product: ProductCase) -> None:
-        """Create a product through the visible product form."""
+        """Создаёт продукт через видимую форму."""
         self.fill_product(product)
         self.page.locator(ProductSelectors.SAVE).click()
         expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Продукт создан.")
         expect(self.product_card(product.name)).to_have_count(1)
 
     def fill_product(self, product: ProductCase) -> None:
-        """Fill product form fields with a complete product case."""
+        """Заполняет поля формы продукта."""
         self.page.locator(ProductSelectors.NAME).fill(product.name)
         self.page.locator(ProductSelectors.CATEGORY).select_option(value=product.category)
         self.page.locator(ProductSelectors.COOKING_STATE).select_option(value=product.cooking_state)
@@ -48,15 +50,27 @@ class RecipeBookPage:
         self.set_checkboxes(ProductSelectors.FLAG, product.flags)
 
     def product_card(self, name: str):
-        """Return a locator for a product card by visible name."""
-        return self.page.locator(ProductSelectors.CARD, has_text=name)
+        """Возвращает карточку продукта по видимому названию."""
+        exact_title = self.page.locator("h3").filter(
+            has_text=re.compile(f"^{re.escape(name)}$")
+        )
+        return self.page.locator(ProductSelectors.CARD).filter(has=exact_title)
 
     def product_names(self) -> list[str]:
-        """Return product card titles in their current UI order."""
+        """Возвращает названия продуктов в текущем порядке карточек."""
         return self.page.locator(f"{ProductSelectors.CARD} h3").all_text_contents()
 
+    def edit_product(self, old_name: str, new_product: ProductCase) -> None:
+        """Открывает продукт на редактирование и сохраняет новые значения."""
+        self.product_card(old_name).locator(ProductSelectors.EDIT_BUTTON).click()
+        expect(self.page.locator(ProductSelectors.ID)).not_to_have_value("")
+        self.fill_product(new_product)
+        self.page.locator(ProductSelectors.SAVE).click()
+        expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Продукт обновлён.")
+        expect(self.product_card(new_product.name)).to_have_count(1)
+
     def delete_product(self, name: str) -> None:
-        """Delete a product from its card action button."""
+        """Удаляет продукт кнопкой из карточки."""
         self.product_card(name).locator(ProductSelectors.DELETE_BUTTON).click()
 
     def filter_products(
@@ -68,7 +82,7 @@ class RecipeBookPage:
         sort_by: str = "name",
         flags: tuple[str, ...] = (),
     ) -> None:
-        """Apply product filters through the UI."""
+        """Применяет фильтры продуктов через интерфейс."""
         self.page.locator(ProductSelectors.SEARCH).fill(query)
         self.page.locator(ProductSelectors.FILTER_CATEGORY).select_option(value=category)
         self.page.locator(ProductSelectors.FILTER_COOKING).select_option(value=cooking_state)
@@ -84,7 +98,7 @@ class RecipeBookPage:
         ingredients: tuple[tuple[str, str], ...],
         flags: tuple[str, ...] = ("Веган", "Без глютена", "Без сахара"),
     ) -> None:
-        """Create a dish through the visible dish form."""
+        """Создаёт блюдо через видимую форму."""
         self.fill_dish(
             name=name,
             category=category,
@@ -106,7 +120,7 @@ class RecipeBookPage:
         ingredients: tuple[tuple[str, str], ...],
         flags: tuple[str, ...] = ("Веган", "Без глютена", "Без сахара"),
     ) -> None:
-        """Fill dish form fields with ingredients selected by visible product name."""
+        """Заполняет форму блюда, выбирая ингредиенты по видимому названию."""
         self.page.locator(DishSelectors.NAME).fill(name)
         self.page.locator(DishSelectors.CATEGORY).select_option(value=category)
         self.page.locator(DishSelectors.PORTION_SIZE).fill(portion_size)
@@ -119,22 +133,56 @@ class RecipeBookPage:
         self.set_checkboxes(DishSelectors.FLAG, flags)
 
     def dish_card(self, name: str):
-        """Return a locator for a dish card by visible name."""
-        return self.page.locator(DishSelectors.CARD, has_text=name)
+        """Возвращает карточку блюда по видимому названию."""
+        exact_title = self.page.locator("h3").filter(
+            has_text=re.compile(f"^{re.escape(name)}$")
+        )
+        return self.page.locator(DishSelectors.CARD).filter(has=exact_title)
+
+    def dish_names(self) -> list[str]:
+        """Возвращает названия блюд в текущем порядке карточек."""
+        return self.page.locator(f"{DishSelectors.CARD} h3").all_text_contents()
+
+    def edit_dish(
+        self,
+        old_name: str,
+        *,
+        name: str,
+        category: str = "Суп",
+        portion_size: str = "200",
+        ingredients: tuple[tuple[str, str], ...],
+        flags: tuple[str, ...] = ("Веган", "Без глютена", "Без сахара"),
+    ) -> None:
+        """Открывает блюдо на редактирование и сохраняет новые значения."""
+        self.dish_card(old_name).locator(DishSelectors.EDIT_BUTTON).click()
+        expect(self.page.locator(DishSelectors.ID)).not_to_have_value("")
+        self.fill_dish(
+            name=name,
+            category=category,
+            portion_size=portion_size,
+            ingredients=ingredients,
+            flags=flags,
+        )
+        self.page.locator(DishSelectors.SAVE).click()
+        expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Блюдо обновлено.")
+        expect(self.dish_card(self._name_without_macro(name))).to_have_count(1)
 
     def delete_dish(self, name: str) -> None:
-        """Delete a dish from its card action button."""
+        """Удаляет блюдо кнопкой из карточки."""
         self.dish_card(name).locator(DishSelectors.DELETE_BUTTON).click()
 
     def set_checkboxes(self, selector: str, values: tuple[str, ...]) -> None:
-        """Set a checkbox group to exactly the supplied values."""
+        """Выставляет группу чекбоксов ровно в переданные значения."""
         checkboxes = self.page.locator(selector)
         for index in range(checkboxes.count()):
             checkbox = checkboxes.nth(index)
-            checkbox.set_checked(checkbox.input_value() in values)
+            should_check = checkbox.input_value() in values
+            if checkbox.is_disabled() and not should_check:
+                continue
+            checkbox.set_checked(should_check)
 
     def is_valid(self, selector: str) -> bool:
-        """Return native HTML validity for a form control."""
+        """Возвращает результат native HTML-валидации элемента формы."""
         return bool(self.page.locator(selector).evaluate("element => element.checkValidity()"))
 
     @staticmethod

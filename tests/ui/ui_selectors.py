@@ -1,12 +1,12 @@
-"""Centralized UI selectors used by Playwright page objects.
+"""Централизованные UI-селекторы для Page Object.
 
-Selectors are intentionally kept outside tests so markup changes affect one
-module instead of scattering CSS strings across the suite.
+Селекторы вынесены из тестов намеренно: при изменении верстки правится один
+модуль, а сценарии остаются читаемыми.
 """
 
 
 class CommonSelectors:
-    """Shared selectors for global UI elements."""
+    """Общие селекторы глобальных элементов интерфейса."""
 
     TOAST = "#toast"
     MODAL = "#details-modal"
@@ -15,7 +15,7 @@ class CommonSelectors:
 
 
 class ProductSelectors:
-    """Selectors for product form, filters and cards."""
+    """Селекторы формы, фильтров и карточек продуктов."""
 
     FORM = "#product-form"
     ID = "#product-id"
@@ -41,11 +41,12 @@ class ProductSelectors:
 
     FLAG = 'input[name="product-flag"]'
     FILTER_FLAG = 'input[name="product-filter-flag"]'
+    EDIT_BUTTON = 'button[data-action="edit-product"]'
     DELETE_BUTTON = 'button[data-action="delete-product"]'
 
 
 class DishSelectors:
-    """Selectors for dish form, preview, filters and cards."""
+    """Селекторы формы, предпросмотра, фильтров и карточек блюд."""
 
     FORM = "#dish-form"
     ID = "#dish-id"
@@ -74,4 +75,5 @@ class DishSelectors:
 
     FLAG = 'input[name="dish-flag"]'
     FILTER_FLAG = 'input[name="dish-filter-flag"]'
+    EDIT_BUTTON = 'button[data-action="edit-dish"]'
     DELETE_BUTTON = 'button[data-action="delete-dish"]'

@@ -1,4 +1,4 @@
-"""Test data generated with equivalence partitioning and boundary analysis."""
+"""Тестовые данные, подобранные по EP и BVA."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class ProductCase:
-    """A product data class used by UI tests."""
+    """Данные продукта для заполнения UI-формы."""
 
     label: str
     name: str
