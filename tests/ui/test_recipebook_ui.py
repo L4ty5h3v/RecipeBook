@@ -295,39 +295,47 @@ class RecipeBookUiSystemTest(unittest.TestCase):
         self.assertIn(f"Имя после макроса: {dish_name}", preview_text)
 
     def test_dish_portion_boundary(self) -> None:
-        """Анализ граничных значений: порция -0.01 невалидна, 0.01 валидна."""
+        """Анализ граничных значений: порции 0 и -0.01 невалидны, 0.01 валидна."""
         water = self.product("Капля воды", calories="0", protein="0", fat="0", carbs="0", category="Жидкость")
         self.app.create_product(water)
 
-        invalid_name = self.dish_name("Нулевая порция")
-        self.app.fill_dish(name=invalid_name, portion_size="-0.01", ingredients=((water.name, "0.01"),))
-        self.page.locator(DishSelectors.SAVE).click()
+        invalid_results: list[bool] = []
+        for invalid_value in ("0", "-0.01"):
+            with self.subTest(invalid_portion=invalid_value):
+                invalid_name = self.dish_name(f"Нулевая порция {invalid_value}")
+                self.app.fill_dish(
+                    name=invalid_name,
+                    portion_size=invalid_value,
+                    ingredients=((water.name, "0.01"),),
+                )
+                self.page.locator(DishSelectors.SAVE).click()
+                invalid_results.append(not self.app.is_valid(DishSelectors.PORTION_SIZE))
+                self.page.locator(DishSelectors.RESET).click()
 
-        is_invalid = not self.app.is_valid(DishSelectors.PORTION_SIZE)
-
-        self.page.locator(DishSelectors.RESET).click()
         self.app.create_dish(
             name=self.dish_name("Мини порция"),
             portion_size="0.01",
             ingredients=((water.name, "0.01"),),
         )
-        self.assertTrue(is_invalid)
+        self.assertTrue(all(invalid_results))
 
     def test_dish_ingredient_quantity_boundary(self) -> None:
-        """Анализ граничных значений: количество ингредиента -0.01 невалидно, 0.01 валидно."""
+        """Анализ граничных значений: количества 0 и -0.01 невалидны, 0.01 валидно."""
         water = self.product("Вода для количества", calories="0", protein="0", fat="0", carbs="0", category="Жидкость")
         self.app.create_product(water)
 
-        invalid_name = self.dish_name("Нулевой ингредиент")
-        self.app.fill_dish(name=invalid_name, ingredients=((water.name, "-0.01"),))
-        self.page.locator(DishSelectors.SAVE).click()
-
         first_quantity = f"{DishSelectors.INGREDIENT_ROW} {DishSelectors.INGREDIENT_QUANTITY}"
-        is_invalid = not self.app.is_valid(first_quantity)
+        invalid_results: list[bool] = []
+        for invalid_value in ("0", "-0.01"):
+            with self.subTest(invalid_quantity=invalid_value):
+                invalid_name = self.dish_name(f"Нулевой ингредиент {invalid_value}")
+                self.app.fill_dish(name=invalid_name, ingredients=((water.name, invalid_value),))
+                self.page.locator(DishSelectors.SAVE).click()
+                invalid_results.append(not self.app.is_valid(first_quantity))
+                self.page.locator(DishSelectors.RESET).click()
 
-        self.page.locator(DishSelectors.RESET).click()
         self.app.create_dish(name=self.dish_name("Мини ингредиент"), ingredients=((water.name, "0.01"),))
-        self.assertTrue(is_invalid)
+        self.assertTrue(all(invalid_results))
 
     def test_dish_unavailable_flag_is_disabled_for_meat_ingredient(self) -> None:
         """Эквивалентное разбиение: блюдо с мясом не попадает в класс веганских блюд."""
