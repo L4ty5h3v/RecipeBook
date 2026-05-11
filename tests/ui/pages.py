@@ -89,6 +89,18 @@ class RecipeBookPage:
         self.page.locator(ProductSelectors.SORT).select_option(value=sort_by)
         self.set_checkboxes(ProductSelectors.FILTER_FLAG, flags)
 
+    def delete_products_by_prefix(self, prefix: str) -> None:
+        """Удаляет через UI все видимые продукты с указанным префиксом."""
+        self.filter_products(query=prefix)
+        self.page.wait_for_timeout(300)
+        cards = self.page.locator(ProductSelectors.CARD)
+        while cards.count() > 0:
+            next_count = cards.count() - 1
+            cards.first.locator(ProductSelectors.DELETE_BUTTON).click(force=True, timeout=5000)
+            expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Продукт удалён.")
+            expect(cards).to_have_count(next_count, timeout=5000)
+        expect(cards).to_have_count(0)
+
     def create_dish(
         self,
         *,
@@ -142,6 +154,36 @@ class RecipeBookPage:
     def dish_names(self) -> list[str]:
         """Возвращает названия блюд в текущем порядке карточек."""
         return self.page.locator(f"{DishSelectors.CARD} h3").all_text_contents()
+
+    def filter_dishes(
+        self,
+        *,
+        query: str = "",
+        category: str = "",
+        flags: tuple[str, ...] = (),
+    ) -> None:
+        """Применяет фильтры блюд через интерфейс."""
+        self.page.locator(DishSelectors.SEARCH).fill(query)
+        self.page.locator(DishSelectors.FILTER_CATEGORY).select_option(value=category)
+        self.set_checkboxes(DishSelectors.FILTER_FLAG, flags)
+
+    def delete_dishes_by_prefix(self, prefix: str) -> None:
+        """Удаляет через UI все видимые блюда с указанным префиксом."""
+        self.filter_dishes(query=prefix)
+        self.page.wait_for_timeout(300)
+        cards = self.page.locator(DishSelectors.CARD)
+        while cards.count() > 0:
+            next_count = cards.count() - 1
+            cards.first.locator(DishSelectors.DELETE_BUTTON).click(force=True, timeout=5000)
+            expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Блюдо удалено.")
+            expect(cards).to_have_count(next_count, timeout=5000)
+        expect(cards).to_have_count(0)
+
+    def delete_test_entities_by_prefix(self, prefix: str) -> None:
+        """Удаляет тестовые блюда и продукты через UI, не обращаясь напрямую к API."""
+        self.open()
+        self.delete_dishes_by_prefix(prefix)
+        self.delete_products_by_prefix(prefix)
 
     def edit_dish(
         self,

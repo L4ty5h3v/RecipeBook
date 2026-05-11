@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import os
 import unittest
+from uuid import uuid4
 
 from playwright.sync_api import expect, sync_playwright
 
-from tests.ui.live_app import LiveAppClient
 from tests.ui.pages import RecipeBookPage
 from tests.ui.test_data import EQUIVALENCE_PRODUCTS, FIVE_PHOTOS, ProductCase, SIX_PHOTOS
 from tests.ui.ui_selectors import CommonSelectors, DishSelectors, ProductSelectors
@@ -23,38 +23,33 @@ class RecipeBookUiSystemTest(unittest.TestCase):
     """Проверяет систему через UI против уже запущенного приложения."""
 
     base_url = os.environ.get("RECIPEBOOK_UI_BASE_URL", "http://127.0.0.1:8080")
-    test_prefix = "__ui_test__ "
 
     @classmethod
     def setUpClass(cls) -> None:
-        """Открывает браузер и проверяет доступность live-приложения."""
-        cls.api = LiveAppClient(cls.base_url)
-        cls.api.require_available()
-        cls.api.cleanup_entities(cls.test_prefix)
+        """Открывает браузер для тестов против вручную запущенного приложения."""
         cls.playwright = sync_playwright().start()
         cls.browser = cls.playwright.chromium.launch(headless=True)
 
     @classmethod
     def tearDownClass(cls) -> None:
-        """Закрывает браузер и убирает тестовые сущности из live-приложения."""
-        try:
-            cls.api.cleanup_entities(cls.test_prefix)
-        finally:
-            cls.browser.close()
-            cls.playwright.stop()
+        """Закрывает браузер после выполнения UI-тестов."""
+        cls.browser.close()
+        cls.playwright.stop()
 
     def setUp(self) -> None:
-        """Готовит чистый контекст браузера и удаляет старые тестовые данные."""
-        self.api.cleanup_entities(self.test_prefix)
+        """Готовит чистый контекст браузера и уникальный префикс данных теста."""
+        self.test_prefix = f"__ui_test__ {uuid4().hex[:8]} "
         self.context = self.browser.new_context(locale="ru-RU")
         self.page = self.context.new_page()
         self.app = RecipeBookPage(self.page, self.base_url)
         self.app.open()
 
     def tearDown(self) -> None:
-        """Закрывает контекст браузера и удаляет данные текущего теста."""
-        self.context.close()
-        self.api.cleanup_entities(self.test_prefix)
+        """Удаляет созданные тестом сущности через UI и закрывает контекст."""
+        try:
+            self.app.delete_test_entities_by_prefix(self.test_prefix)
+        finally:
+            self.context.close()
 
     def product(self, name: str, **overrides: object) -> ProductCase:
         """Создаёт ProductCase с безопасным тестовым префиксом в названии."""
