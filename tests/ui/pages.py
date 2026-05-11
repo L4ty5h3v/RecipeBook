@@ -2,12 +2,38 @@
 
 from __future__ import annotations
 
+import fcntl
+import os
 import re
+import tempfile
 
 from playwright.sync_api import Page, expect
 
 from tests.ui.ui_selectors import CommonSelectors, DishSelectors, ProductSelectors
 from tests.ui.test_data import ProductCase
+
+
+class UiWriteLock:
+    """Межпроцессная блокировка write-операций для pytest-xdist."""
+
+    def __init__(self) -> None:
+        self.path = os.environ.get(
+            "RECIPEBOOK_UI_WRITE_LOCK",
+            os.path.join(tempfile.gettempdir(), "recipebook-ui-write.lock"),
+        )
+        self._file = None
+
+    def __enter__(self):
+        self._file = open(self.path, "w", encoding="utf-8")
+        fcntl.flock(self._file, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        if self._file is None:
+            return
+        fcntl.flock(self._file, fcntl.LOCK_UN)
+        self._file.close()
+        self._file = None
 
 
 class RecipeBookPage:
@@ -16,6 +42,7 @@ class RecipeBookPage:
     def __init__(self, page: Page, base_url: str) -> None:
         self.page = page
         self.base_url = base_url
+        self.write_lock = UiWriteLock()
 
     def open(self) -> None:
         """Открывает приложение и ждёт загрузки справочников и списков."""
@@ -32,7 +59,7 @@ class RecipeBookPage:
     def create_product(self, product: ProductCase) -> None:
         """Создаёт продукт через видимую форму."""
         self.fill_product(product)
-        self.page.locator(ProductSelectors.SAVE).click()
+        self._submit_with_write_lock("POST", "/api/products", ProductSelectors.SAVE)
         expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Продукт создан.")
         expect(self.product_card(product.name)).to_have_count(1)
 
@@ -65,13 +92,14 @@ class RecipeBookPage:
         self.product_card(old_name).locator(ProductSelectors.EDIT_BUTTON).click()
         expect(self.page.locator(ProductSelectors.ID)).not_to_have_value("")
         self.fill_product(new_product)
-        self.page.locator(ProductSelectors.SAVE).click()
+        self._submit_with_write_lock("PUT", "/api/products/", ProductSelectors.SAVE)
         expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Продукт обновлён.")
         expect(self.product_card(new_product.name)).to_have_count(1)
 
     def delete_product(self, name: str) -> None:
         """Удаляет продукт кнопкой из карточки."""
-        self.product_card(name).locator(ProductSelectors.DELETE_BUTTON).click()
+        button = self.product_card(name).locator(ProductSelectors.DELETE_BUTTON)
+        self._click_with_write_lock("DELETE", "/api/products/", button)
 
     def filter_products(
         self,
@@ -96,7 +124,8 @@ class RecipeBookPage:
         cards = self.page.locator(ProductSelectors.CARD)
         while cards.count() > 0:
             next_count = cards.count() - 1
-            cards.first.locator(ProductSelectors.DELETE_BUTTON).click(force=True, timeout=5000)
+            button = cards.first.locator(ProductSelectors.DELETE_BUTTON)
+            self._click_with_write_lock("DELETE", "/api/products/", button, force=True)
             expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Продукт удалён.")
             expect(cards).to_have_count(next_count, timeout=5000)
         expect(cards).to_have_count(0)
@@ -118,7 +147,7 @@ class RecipeBookPage:
             ingredients=ingredients,
             flags=flags,
         )
-        self.page.locator(DishSelectors.SAVE).click()
+        self._submit_with_write_lock("POST", "/api/dishes", DishSelectors.SAVE)
         expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Блюдо создано.")
         expected_name = self._name_without_macro(name)
         expect(self.dish_card(expected_name)).to_have_count(1)
@@ -174,7 +203,8 @@ class RecipeBookPage:
         cards = self.page.locator(DishSelectors.CARD)
         while cards.count() > 0:
             next_count = cards.count() - 1
-            cards.first.locator(DishSelectors.DELETE_BUTTON).click(force=True, timeout=5000)
+            button = cards.first.locator(DishSelectors.DELETE_BUTTON)
+            self._click_with_write_lock("DELETE", "/api/dishes/", button, force=True)
             expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Блюдо удалено.")
             expect(cards).to_have_count(next_count, timeout=5000)
         expect(cards).to_have_count(0)
@@ -205,13 +235,14 @@ class RecipeBookPage:
             ingredients=ingredients,
             flags=flags,
         )
-        self.page.locator(DishSelectors.SAVE).click()
+        self._submit_with_write_lock("PUT", "/api/dishes/", DishSelectors.SAVE)
         expect(self.page.locator(CommonSelectors.TOAST)).to_contain_text("Блюдо обновлено.")
         expect(self.dish_card(self._name_without_macro(name))).to_have_count(1)
 
     def delete_dish(self, name: str) -> None:
         """Удаляет блюдо кнопкой из карточки."""
-        self.dish_card(name).locator(DishSelectors.DELETE_BUTTON).click()
+        button = self.dish_card(name).locator(DishSelectors.DELETE_BUTTON)
+        self._click_with_write_lock("DELETE", "/api/dishes/", button)
 
     def set_checkboxes(self, selector: str, values: tuple[str, ...]) -> None:
         """Выставляет группу чекбоксов ровно в переданные значения."""
@@ -226,6 +257,27 @@ class RecipeBookPage:
     def is_valid(self, selector: str) -> bool:
         """Возвращает результат native HTML-валидации элемента формы."""
         return bool(self.page.locator(selector).evaluate("element => element.checkValidity()"))
+
+    def _submit_with_write_lock(self, method: str, url_part: str, button_selector: str) -> None:
+        """Жмёт submit под lock и ждёт write-ответ backend."""
+        button = self.page.locator(button_selector)
+        self._click_with_write_lock(method, url_part, button)
+
+    def _click_with_write_lock(
+        self,
+        method: str,
+        url_part: str,
+        locator,
+        *,
+        force: bool = False,
+    ) -> None:
+        """Сериализует write-запросы, чтобы xdist workers не перетирали db.json."""
+        with self.write_lock:
+            with self.page.expect_response(
+                lambda response: url_part in response.url
+                and response.request.method == method
+            ):
+                locator.click(force=force, timeout=5000)
 
     @staticmethod
     def _name_without_macro(name: str) -> str:
